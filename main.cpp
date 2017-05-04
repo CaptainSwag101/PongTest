@@ -1,4 +1,8 @@
-#include <cstdlib>
+#include <stdlib.h>
+#include <stdio.h>
+#include <execinfo.h>
+#include <signal.h>
+#include <unistd.h>
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_image.h>
@@ -11,8 +15,7 @@
 #include <SDL2/SDL_video.h>
 
 
-// global method declarations
-int main();
+//Function prototypes
 void processInput();
 void updateBall();
 
@@ -26,7 +29,6 @@ SDL_Renderer *sdlRenderer;
 SDL_Texture *sdlTexture;
 SDL_DisplayMode dispMode;
 
-
 SDL_Rect player1;
 SDL_Rect player2;
 SDL_Rect ball;
@@ -34,8 +36,91 @@ SDL_Rect ball;
 int ballSpeedX;
 int ballSpeedY;
 
+char* exe = 0;
+
+int initialiseExecutableName() 
+{
+    char link[1024];
+    exe = new char[1024];
+    snprintf(link,sizeof link,"/proc/%d/exe",getpid());
+    if(readlink(link,exe,sizeof link)==-1) {
+        fprintf(stderr,"ERRORRRRR\n");
+        exit(1);
+    }
+    printf("Executable name initialised: %s\n",exe);
+}
+
+const char* getExecutableName()
+{
+    if (exe == 0)
+        initialiseExecutableName();
+    return exe;
+}
+
+/* get REG_EIP from ucontext.h */
+#define __USE_GNU
+#include <ucontext.h>
+
+void bt_sighandler(int sig, siginfo_t *info, void *secret)
+{
+    void *trace[16];
+    char **messages = (char **)NULL;
+    int i, trace_size = 0;
+    ucontext_t *uc = (ucontext_t *)secret;
+
+    /* Do something useful with siginfo_t */
+    if (sig == SIGSEGV)
+        printf("Got signal %d, faulty address is %p, "
+            "from %p\n", sig, info->si_addr, 
+            uc->uc_mcontext.gregs[REG_EIP]);
+    else
+        printf("Got signal %d#92;\n", sig);
+
+    trace_size = backtrace(trace, 16);
+    /* overwrite sigaction with caller's address */
+    trace[1] = (void *) uc->uc_mcontext.gregs[REG_EIP];
+
+    messages = backtrace_symbols(trace, trace_size);
+    /* skip first stack frame (points here) */
+    printf("[bt] Execution path:#92;\n");
+    for (i=1; i<trace_size; ++i)
+    {
+        printf("[bt] %s#92;\n", messages[i]);
+
+        /* find first occurence of '(' or ' ' in message[i] and assume
+        * everything before that is the file name. (Don't go beyond 0 though
+        * (string terminator)*/
+        size_t p = 0;
+        while(messages[i][p] != '(' && messages[i][p] != ' '
+                && messages[i][p] != 0)
+            ++p;
+
+        char syscom[256];
+        sprintf(syscom,"addr2line %p -e %.*s", trace[i] , p, messages[i] );
+            //last parameter is the filename of the symbol
+        system(syscom);
+
+    }
+
+    SDL_Quit();
+    exit(1);
+}
+
+
 int main()
 {
+    //Install our signal handler
+    struct sigaction sa;
+
+    sa.sa_sigaction = (void *)bt_sighandler;
+    sigemptyset (&sa.sa_mask);
+    sa.sa_flags = SA_RESTART | SA_SIGINFO;
+
+    sigaction(SIGSEGV, &sa, NULL);
+    sigaction(SIGUSR1, &sa, NULL);
+    /* ... add any other signals here */
+    
+
     // initialize SDL video
     if (SDL_Init(SDL_INIT_VIDEO) < 0)
     {
@@ -67,6 +152,9 @@ int main()
         }
     }
 
+
+    SDL_Event event;
+
     //sdlTexture = SDL_CreateTexture(sdlRenderer, dispMode.format, SDL_TEXTUREACCESS_STATIC, dispMode.w, dispMode.h);
     SDL_SetRenderDrawColor(sdlRenderer, 0, 0, 0, 255);
     SDL_RenderClear(sdlRenderer);
@@ -79,6 +167,7 @@ int main()
     Uint32 Amask;
 
     SDL_PixelFormatEnumToMasks(dispMode.format, &bpp, &Rmask, &Gmask, &Bmask, &Amask);
+    screen = SDL_CreateRGBSurface(0, dispMode.w, dispMode.h, bpp, Rmask, Gmask, Bmask, Amask);
 
     ballSpeedX = (dispMode.w / 90);
     ballSpeedY = 0;
@@ -105,20 +194,20 @@ int main()
     double timeStepMs = 1000.0f / dispMode.refresh_rate;
     double timeCurrentMs = 0.0f, timeLastMs = 0.0f, timeDeltaMs = 0.0f, timeAccumulatedMs = 0.0f;
 
+
     // program main loop
     while (!done)
     {
         // Event processing loop
-        SDL_Event event;
-        SDL_PollEvent(&event);
-        // check for messages
-        switch (event.type)
+        while (SDL_PollEvent(&event))
         {
-            // exit if the window is closed
-            case SDL_QUIT:
+            if (event.type == SDL_QUIT)
+            {
                 done = true;
-                break;
+            }
         }
+
+        if (done) break;
 
 
         // Process timing updates
@@ -133,13 +222,14 @@ int main()
               processInput();
               updateBall();
               timeAccumulatedMs -= timeStepMs;
+
+              SDL_PumpEvents();
         }
 
 
-        screen = SDL_CreateRGBSurface(0, dispMode.w, dispMode.h, bpp, Rmask, Gmask, Bmask, Amask);
-
-
-        // DRAWING STARTS HERE
+        /////////////////////
+        //DRAWING STARTS HERE
+        //===================
 
         // draw players and ball
         SDL_FillRect(screen, &player1, SDL_MapRGB(screen->format, 0xFF, 0xFF, 0xFF));
@@ -151,30 +241,36 @@ int main()
         sdlTexture = SDL_CreateTextureFromSurface(sdlRenderer, screen);
         delete screen;
 
-        // DRAWING ENDS HERE
+        ///////////////////
+        //DRAWING ENDS HERE
+        //=================
+
 
         // finally, update the screen :)
         SDL_RenderClear(sdlRenderer);
         SDL_RenderCopy(sdlRenderer, sdlTexture, NULL, NULL);
         SDL_RenderPresent(sdlRenderer);
 
-        SDL_DestroyTexture(sdlTexture);
+        //SDL_DestroyTexture(sdlTexture);
+    }
 
-    } // end main loop
 
-    // all is well ;)
+    //Clean everything up
+    SDL_DestroyTexture(sdlTexture);
     SDL_DestroyRenderer(sdlRenderer);
     SDL_DestroyWindow(window);
 
-    printf("Exited cleanly\n");
+    SDL_Quit();
+
+    printf("Exited cleanly.\n");
     return 0;
 }
 
+
 void processInput()
 {
-    SDL_PumpEvents();
-
     const Uint8 *keystate = SDL_GetKeyboardState(NULL);
+
 
     // check for keypresses
     if (keystate[SDL_SCANCODE_ESCAPE])
@@ -183,6 +279,7 @@ void processInput()
         return;
     }
 
+
     if (keystate[SDL_SCANCODE_RETURN])
     {
         ball.w = 32;
@@ -190,6 +287,7 @@ void processInput()
         ball.x = (dispMode.w - ball.w) / 2;
         ball.y = (dispMode.h - ball.h) / 2;
     }
+
 
     if (keystate[SDL_SCANCODE_W] && (player1.y - dispMode.h / 90) >= 0)
     {
