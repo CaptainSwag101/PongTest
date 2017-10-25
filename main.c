@@ -1,18 +1,5 @@
-#include <stdbool.h>
-#include <stdlib.h>
-#include <stdint.h>
 #include <stdio.h>
-#include <unistd.h>
-
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_image.h>
-#include <SDL2/SDL_opengl.h>
-#include <SDL2/SDL_pixels.h>
-#include <SDL2/SDL_render.h>
-#include <SDL2/SDL_surface.h>
-#include <SDL2/SDL_system.h>
-#include <SDL2/SDL_types.h>
-#include <SDL2/SDL_video.h>
 
 
 //Function prototypes
@@ -21,7 +8,7 @@ void updateBall();
 
 
 //Variable declarations
-bool done = false;
+int done = 0;
 SDL_Window *window;
 SDL_Renderer *sdlRenderer;
 SDL_DisplayMode dispMode;
@@ -30,8 +17,8 @@ SDL_Rect player1;
 SDL_Rect player2;
 SDL_Rect ball;
 
-int ballSpeedX;
-int ballSpeedY;
+double ballSpeedX;
+double ballSpeedY;
 
 
 int main()
@@ -45,11 +32,10 @@ int main()
 
     window = SDL_CreateWindow("PongTest", 0, 0, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP | SDL_WINDOW_OPENGL);
     //gl = SDL_GL_CreateContext(window);
-    SDL_GL_SetSwapInterval(1);
     sdlRenderer = SDL_CreateRenderer(window, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-
     SDL_Init(SDL_INIT_VIDEO);
-
+    SDL_GL_SetSwapInterval(1);
+    
     // Get current display mode of all displays.
     for (int i = 0; i < SDL_GetNumVideoDisplays(); ++i)
     {
@@ -70,8 +56,8 @@ int main()
 
     SDL_Event event;
 
-    ballSpeedX = (dispMode.w / 90);
-    ballSpeedY = 0;
+    ballSpeedX = (dispMode.w / 90.0);
+    ballSpeedY = 0.0;
 
     // make sure SDL cleans up before exit
     atexit(SDL_Quit);
@@ -79,21 +65,21 @@ int main()
     // create the player paddles and ball
     player1.w = 32;
     player1.h = 128;
-    player1.x = (dispMode.w - player1.w) / 8;
-    player1.y = (dispMode.h - player1.h) / 2;
+    player1.x = (dispMode.w - player1.w) / 8.0;
+    player1.y = (dispMode.h - player1.h) / 2.0;
 
     player2.w = 32;
     player2.h = 128;
-    player2.x = (dispMode.w - player2.w) / 8 * 7;
-    player2.y = (dispMode.h - player2.h) / 2;
+    player2.x = (dispMode.w - player2.w) / 8.0 * 7.0;
+    player2.y = (dispMode.h - player2.h) / 2.0;
 
     ball.w = 32;
     ball.h = 32;
-    ball.x = (dispMode.w - ball.w) / 2;
-    ball.y = (dispMode.h - ball.h) / 2;
+    ball.x = (dispMode.w - ball.w) / 2.0;
+    ball.y = (dispMode.h - ball.h) / 2.0;
 
-    double timeStepMs = 1000.0f / dispMode.refresh_rate;
-    double timeCurrentMs = 0.0f, timeLastMs = 0.0f, timeDeltaMs = 0.0f, timeAccumulatedMs = 0.0f;
+    double timeStepMs = 1000.0 / dispMode.refresh_rate;
+    double timeCurrentMs = 0.0, timeLastMs = 0.0, timeDeltaMs = 0.0, timeAccumulatedMs = 0.0;
 
 
     // program main loop
@@ -104,7 +90,7 @@ int main()
         {
             if (event.type == SDL_QUIT)
             {
-                done = true;
+                done = 1;
             }
         }
 
@@ -164,13 +150,13 @@ int main()
 
 void processInput()
 {
-    const Uint8 *keystate = SDL_GetKeyboardState(NULL);
+    const uint8_t *keystate = SDL_GetKeyboardState(NULL);
 
 
     // check for keypresses
     if (keystate[SDL_SCANCODE_ESCAPE])
     {
-        done = true;
+        done = 1;
         return;
     }
 
@@ -179,27 +165,27 @@ void processInput()
     {
         ball.w = 32;
         ball.h = 32;
-        ball.x = (dispMode.w - ball.w) / 2;
-        ball.y = (dispMode.h - ball.h) / 2;
+        ball.x = (dispMode.w - ball.w) / 2.0;
+        ball.y = (dispMode.h - ball.h) / 2.0;
     }
 
 
-    if (keystate[SDL_SCANCODE_W] && (player1.y - dispMode.h / 90) >= 0)
+    if (keystate[SDL_SCANCODE_W] && (player1.y - dispMode.h / 90.0) >= 0)
     {
-        player1.y -= dispMode.h / 90;
+        player1.y -= dispMode.h / 90.0;
     }
-    else if (keystate[SDL_SCANCODE_S] && (player1.y + player1.h + dispMode.h / 90) <= dispMode.h)
+    else if (keystate[SDL_SCANCODE_S] && (player1.y + player1.h + dispMode.h / 90.0) <= dispMode.h)
     {
-        player1.y += dispMode.h / 90;
+        player1.y += dispMode.h / 90.0;
     }
 
-    if (keystate[SDL_SCANCODE_I] && (player2.y - dispMode.h / 90) >= 0)
+    if (keystate[SDL_SCANCODE_I] && (player2.y - dispMode.h / 90.0) >= 0)
     {
-        player2.y -= dispMode.h / 90;
+        player2.y -= dispMode.h / 90.0;
     }
-    else if (keystate[SDL_SCANCODE_K] && (player2.y + player2.h + dispMode.h / 90) <= dispMode.h)
+    else if (keystate[SDL_SCANCODE_K] && (player2.y + player2.h + dispMode.h / 90.0) <= dispMode.h)
     {
-        player2.y += dispMode.h / 90;
+        player2.y += dispMode.h / 90.0;
     }
 }
 
@@ -217,45 +203,39 @@ void updateBall()
     }
 
     // check for collision with player1's paddle
-    if (ball.y + ball.h >= player1.y && ball.y <= player1.y + player1.h)
+    if (SDL_HasIntersection(&ball, &player1))
     {
-        if (ball.x <= player1.x + player1.w && ball.x + ball.w >= player1.x)
+        if (ballSpeedX < 0)
         {
-            if (ballSpeedX < 0)
-            {
-                ballSpeedX = -ballSpeedX;
-                int oldBallSpeedX = ballSpeedX;
-                int oldBallSpeedY = ballSpeedY;
-                ballSpeedY += ((ball.y + (ball.h / 2)) - (player1.y + (player1.h / 2))) / 32;
-                ballSpeedX += abs(oldBallSpeedY) - abs(ballSpeedY);
+            ballSpeedX = -ballSpeedX;
+            double oldBallSpeedX = ballSpeedX;
+            double oldBallSpeedY = ballSpeedY;
+            ballSpeedY += ((ball.y + (ball.h / 2.0)) - (player1.y + (player1.h / 2.0))) / 32.0;
+            ballSpeedX += abs(oldBallSpeedY) - abs(ballSpeedY);
 
-                if (ballSpeedX == 0)
-                {
-                    ballSpeedX = oldBallSpeedX;
-                    ballSpeedY = oldBallSpeedY;
-                }
+            if (ballSpeedX == 0)
+            {
+                ballSpeedX = oldBallSpeedX;
+                ballSpeedY = oldBallSpeedY;
             }
         }
     }
 
     // check for collision with player2's paddle
-    if (ball.y + ball.h >= player2.y && ball.y <= player2.y + player2.h)
+    if (SDL_HasIntersection(&ball, &player2))
     {
-        if (ball.x <= player2.x + player2.w && ball.x + ball.w >= player2.x)
+        if (ballSpeedX > 0)
         {
-            if (ballSpeedX > 0)
-            {
-                ballSpeedX = -ballSpeedX;
-                int oldBallSpeedX = ballSpeedX;
-                int oldBallSpeedY = ballSpeedY;
-                ballSpeedY += ((ball.y + (ball.h / 2)) - (player2.y + (player2.h / 2))) / 32;
-                ballSpeedX -= abs(oldBallSpeedY) - abs(ballSpeedY);
+            ballSpeedX = -ballSpeedX;
+            double oldBallSpeedX = ballSpeedX;
+            double oldBallSpeedY = ballSpeedY;
+            ballSpeedY += ((ball.y + (ball.h / 2.0)) - (player2.y + (player2.h / 2.0))) / 32.0;
+            ballSpeedX -= abs(oldBallSpeedY) - abs(ballSpeedY);
 
-                if (ballSpeedX == 0)
-                {
-                    ballSpeedX = oldBallSpeedX;
-                    ballSpeedY = oldBallSpeedY;
-                }
+            if (ballSpeedX == 0)
+            {
+                ballSpeedX = oldBallSpeedX;
+                ballSpeedY = oldBallSpeedY;
             }
         }
     }
